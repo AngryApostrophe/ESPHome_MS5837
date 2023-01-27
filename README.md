@@ -2,8 +2,8 @@
 Custom ESPHome component for the MS5837-series pressure and temperature sensor.  Allows easy integration of the sensor into Home Assistant.  
 
 # Wiring
-<img src="images/MS5837_Pinout.png" width="200px">
-<img src="images/MS5837_Circuit.png" width="200px">
+<img src="MS5837_Pinout.png" width="200px">
+<img src="MS5837_Circuit.png" width="200px">
 Note: The 2 10k pull-up resistors are not typically needed on ESP32s.
 
 # Usage
