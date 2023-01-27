@@ -20,6 +20,10 @@ api:
 
 ota:
 
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
 i2c:
   sda: 21
   scl: 22
