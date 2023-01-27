@@ -22,18 +22,19 @@
 #define MS5837_MODE_ALTITUDE   1    // Return either true altitude or pressure altitude depending on if user supplies a sea level pressure
 #define MS5837_MODE_DEPTH      2    // Return depth.  Needs ambient pressure for accurate results (see service "update_pressure")
 
-#define MS5837_UNITS_ALT_M         0
-#define MS5837_UNITS_ALT_FT        1
-#define MS5837_UNITS_ALT_CM        2
-#define MS5837_UNITS_ALT_IN        3
-#define MS5837_UNITS_PRESS_HPA     0
-#define MS5837_UNITS_PRESS_PA      1
-#define MS5837_UNITS_PRESS_KPA     2
-#define MS5837_UNITS_PRESS_INHG    3
 #define MS5837_UNITS_TEMP_C        0
 #define MS5837_UNITS_TEMP_F        1
 #define MS5837_UNITS_TEMP_K        2
 #define MS5837_UNITS_TEMP_R        3
+#define MS5837_UNITS_PRESS_HPA     0
+#define MS5837_UNITS_PRESS_PA      1
+#define MS5837_UNITS_PRESS_KPA     2
+#define MS5837_UNITS_PRESS_INHG    3
+#define MS5837_UNITS_ALT_M         0
+#define MS5837_UNITS_ALT_FT        1
+#define MS5837_UNITS_ALT_CM        2
+#define MS5837_UNITS_ALT_IN        3
+
 
 
 class MS5837_Component : public PollingComponent, public Sensor, public CustomAPIDevice
@@ -51,10 +52,13 @@ public:
 		atmosphericpress = MS5837_ISA_SEALEVEL_PRESSURE; //ISA sea level pressure
 		bPCalcMode = mode;
 
+		fPressOffset = 0;
+		fTempOffset = 0;
+
 		//Setup default units if user doesn't specify
-			bAltUnits = MS5837_UNITS_ALT_M;
-			bPressUnits = MS5837_UNITS_PRESS_HPA;
 			bTempUnits = MS5837_UNITS_TEMP_C;
+			bPressUnits = MS5837_UNITS_PRESS_HPA;
+			bAltUnits = MS5837_UNITS_ALT_M;
 	}
 
 	float get_setup_priority() const override { return esphome::setup_priority::BUS; }
@@ -223,8 +227,8 @@ public:
 			calculate();
 
 		//Publish the results
-			pressure_sensor->publish_state(ConvertPress(Pressure()));
 			temperature_sensor->publish_state(ConvertTemp(Temperature()));
+			pressure_sensor->publish_state(ConvertPress(Pressure()));
 
 			if (bPCalcMode == MS5837_MODE_ALTITUDE)
 				altitude_sensor->publish_state(ConvertAlt(Altitude()));
@@ -331,7 +335,7 @@ public:
 		}
 
 	//Allow user to change target units from ESPHome device yaml
-		void SetUnits(uint8_t bAlt, uint8_t bPress, uint8_t bTemp)
+		void SetUnits(uint8_t bTemp = MS5837_UNITS_TEMP_C, uint8_t bPress = MS5837_UNITS_PRESS_HPA, uint8_t bAlt = MS5837_UNITS_ALT_M)
 		{
 			bAltUnits = bAlt;
 			bPressUnits = bPress;
@@ -344,19 +348,30 @@ public:
 			fluidDensity = fDensity;
 		}
 
+	//Set calibration values from the yaml
+		void SetOffsets(float fTemp_c, float fPress_hpa)
+		{
+			fTempOffset = fTemp_c;
+			fPressOffset = fPress_hpa;
+		}
+
 private:
 	uint8_t _model; //Sensor model as read from the device
 	bool bInitialized;
 	uint8_t bPCalcMode; // 0=Raw data only.  1=Altitude.  2=Depth
 
 	//Units in which to report the results
-		uint8_t bAltUnits;
-		uint8_t bPressUnits;
 		uint8_t bTempUnits;
+		uint8_t bPressUnits;
+		uint8_t bAltUnits;
 
-	float fluidDensity; 			//Density of the fluid the sensor is in (kg/m^3).  Used for converting pressure to depth.
+	//Calibration offsets
+		float fTempOffset;  //deg c
+		float fPressOffset; //hPa
+
+	float fluidDensity; 		//Density of the fluid the sensor is in (kg/m^3).  Used for converting pressure to depth.
 	float atmosphericpress; 	//This has 2 uses.  In MS5837_MODE_ALTITUDE it is the Sea Level Pressure in Pa, if known (for example, from a weather station).  You'll get more accurate height results.  If not known, it'll use ISA (101325 pa)
-														//                  In MS5837_MODE_DEPTH it is the actual ambient atmospheric pressure in Pa.
+								//                  In MS5837_MODE_DEPTH it is the actual ambient atmospheric pressure in Pa.
 
 	//Calculation variables
 		uint16_t C[8];
@@ -391,19 +406,19 @@ private:
     	return n_rem ^ 0x00;
     }
 
-	//Pressure returned in mbar or mbar*conversion rate.
-		float Pressure(float conversion = 1.0f)
+	//Pressure returned in hpa
+		float Pressure()
 		{
 			if ( _model == MS5837_VERSION_02BA01 || _model == MS5837_VERSION_02BA21 || _model == MS5837_VERSION_02BA06)
-				return P*conversion/100.0f;
+				return (P/100.0f) + fPressOffset;
 			else
-				return P*conversion/10.0f;
+				return P/10.0f + fPressOffset;
 		}
 
 	//Temperature returned in deg C.
 		float Temperature()
 		{
-			return TEMP/100.0f;
+			return TEMP/100.0f + fTempOffset;
 		}
 
 	//Calculate the depth, given the sensed pressure and known ambient pressure
@@ -411,7 +426,7 @@ private:
 		{
 			// The pressure sensor measures absolute pressure, so it will measure the atmospheric pressure + water pressure
 			// We subtract the atmospheric pressure to calculate the depth with only the water pressure
-			return (Pressure(100)-atmosphericpress)/(fluidDensity*9.80665);  //Pressure(100) converts hPa to Pa
+			return ((Pressure()*100)-atmosphericpress)/(fluidDensity*9.80665);  //Pressure()*100 converts hPa to Pa
 		}
 
 	//Calculate Pressure Altitude in m (relative to sea level at ISA)

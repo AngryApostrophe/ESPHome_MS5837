@@ -2,8 +2,8 @@
 Custom ESPHome component for the MS5837-series pressure and temperature sensor.  Allows easy integration of the sensor into Home Assistant.  
 
 # Wiring
-<img src="MS5837_Pinout.png" width="200px">
-<img src="MS5837_Circuit.png" width="200px">
+<img src="/images/MS5837_Pinout.png" width="400px">
+<img src="/images/MS5837_Circuit.png" width="400px">
 Note: I've had better luck using 2.2k ohm resistors rather than 10k.
 
 # Usage
@@ -37,7 +37,8 @@ sensor:
   - platform: custom
     lambda: |-
       auto MS5837 = new MS5837_Component(60000, MS5837_MODE_ALTITUDE);
-      MS5837->SetUnits(MS5837_UNITS_ALT_FT, MS5837_UNITS_PRESS_INHG, MS5837_UNITS_TEMP_F);
+      MS5837->SetUnits(MS5837_UNITS_TEMP_F, MS5837_UNITS_PRESS_INHG, MS5837_UNITS_ALT_FT);
+      MS5837->SetOffsets(0, 1.7f);
       App.register_component(MS5837);
       return {MS5837->temperature_sensor, MS5837->pressure_sensor, MS5837->altitude_sensor};
     sensors:
@@ -63,15 +64,15 @@ Next is the operating mode.  There are 3 choices:
 - MS5837_MODE_DEPTH - Report depth.  Needs ambient pressure for accurate results (see service "update_pressure")
 
 ### Units
-Decide which units to report in (optional)
+Decide which units to report in (optional).  Altitude/Depth units may be left out if using MS5837_MODE_RAW.
 ``` yaml
-MS5837->SetUnits(MS5837_UNITS_ALT_FT, MS5837_UNITS_PRESS_INHG, MS5837_UNITS_TEMP_F);
+MS5837->SetUnits(MS5837_UNITS_TEMP_F, MS5837_UNITS_PRESS_INHG, MS5837_UNITS_ALT_FT);
 ```
-Altitude/Depth units
-- MS5837_UNITS_ALT_M  - Meters (default)
-- MS5837_UNITS_ALT_FT - Feet
-- MS5837_UNITS_ALT_CM - Centimeters
-- MS5837_UNITS_ALT_IN - Inches
+Temperature units
+- MS5837_UNITS_TEMP_C - Celsius (default)
+- MS5837_UNITS_TEMP_F - Fahrenheit
+- MS5837_UNITS_TEMP_K - Kelvin
+- MS5837_UNITS_TEMP_R - Rankine
 
 Pressure units
 - MS5837_UNITS_PRESS_HPA  - HectoPascals (default)
@@ -79,11 +80,20 @@ Pressure units
 - MS5837_UNITS_PRESS_KPA  - KiloPascals
 - MS5837_UNITS_PRESS_INHG - Inches of Mercury
 
-Temperature units
-- MS5837_UNITS_TEMP_C - Celsius (default)
-- MS5837_UNITS_TEMP_F - Fahrenheit
-- MS5837_UNITS_TEMP_K - Kelvin
-- MS5837_UNITS_TEMP_R - Rankine
+Altitude/Depth units
+- MS5837_UNITS_ALT_M  - Meters (default)
+- MS5837_UNITS_ALT_FT - Feet
+- MS5837_UNITS_ALT_CM - Centimeters
+- MS5837_UNITS_ALT_IN - Inches
+
+### Calibration offsets
+An offset may be applied to temperature and pressure based on a known value.  For example, pressure reads low compared to an accurate weather station.
+``` yaml
+MS5837->SetOffsets(0, 1.7f);
+```
+- Temperature: °C
+- Pressure: hPa
+
 
 ### Read the values
 If using MS5837_MODE_RAW, only 2 values will be returned
@@ -138,9 +148,9 @@ Sea Level Pressure may be optionally supplied.
 Ambient pressure needs to be supplied to accurately calculate depth.  If not available, it assumes your location is at sea level and the depth reading will be inaccurate.  This could be supplied from another sensor above water or a weather station.  If neither are available, calculating the [standard pressure](https://www.madur.com/index.php?page=/altitude) should get you close.
 
 # References
-[MS583702BA06-50 Datasheet] (https://www.te.com/commerce/DocumentDelivery/DDEController?Action=srchrtrv&DocNm=MS5837-02BA01&DocType=DS&DocLang=English)
+[MS583702BA06-50 Datasheet](https://www.te.com/commerce/DocumentDelivery/DDEController?Action=srchrtrv&DocNm=MS5837-02BA01&DocType=DS&DocLang=English)
 
-[MS583730BA01-50 Datasheet] (https://www.te.com/commerce/DocumentDelivery/DDEController?Action=srchrtrv&DocNm=MS5837-30BA&DocType=DS&DocLang=English)
+[MS583730BA01-50 Datasheet](https://www.te.com/commerce/DocumentDelivery/DDEController?Action=srchrtrv&DocNm=MS5837-30BA&DocType=DS&DocLang=English)
 
 # Thanks
 Initially based on BlueRobotics' [MS5837 Arduino library](https://github.com/bluerobotics/BlueRobotics_MS5837_Library).
