@@ -55,13 +55,15 @@ public:
 		fPressOffset = 0;
 		fTempOffset = 0;
 
+		bExternalPress = false;
+
 		//Setup default units if user doesn't specify
 			bTempUnits = MS5837_UNITS_TEMP_C;
 			bPressUnits = MS5837_UNITS_PRESS_HPA;
 			bAltUnits = MS5837_UNITS_ALT_M;
 	}
 
-	float get_setup_priority() const override { return esphome::setup_priority::BUS; }
+	float get_setup_priority() const override { return esphome::setup_priority::AFTER_CONNECTION; }
 
 	void setup() override
 	{
@@ -229,11 +231,18 @@ public:
 		//Publish the results
 			temperature_sensor->publish_state(ConvertTemp(Temperature()));
 			pressure_sensor->publish_state(ConvertPress(Pressure()));
-
-			if (bPCalcMode == MS5837_MODE_ALTITUDE)
-				altitude_sensor->publish_state(ConvertAlt(Altitude()));
-			else if (bPCalcMode == MS5837_MODE_DEPTH)
-				altitude_sensor->publish_state(ConvertAlt(Depth()));
+			
+			if (bExternalPress && !bExternalPressValid) //If we're waiting for external pressure, don't calculate Alt/Depth
+			{
+				ESP_LOGE("custom", "MS5837:  Waiting for ambient pressure from Home Assitant entity. Skipped alt/depth.");
+			}
+			else
+			{
+				if (bPCalcMode == MS5837_MODE_ALTITUDE)
+					altitude_sensor->publish_state(ConvertAlt(Altitude()));
+				else if (bPCalcMode == MS5837_MODE_DEPTH)
+					altitude_sensor->publish_state(ConvertAlt(Depth()));
+			}
 	}
 
 	//Run the calculations from the raw temp/press reported by the sensor
@@ -355,10 +364,42 @@ public:
 			fPressOffset = fPress_hpa;
 		}
 
+	//Option to subscribe to Home Assistant entity for ambient pressure, rather than using service
+		void SubscribeToPressureState(std::string strEntity_Id, uint8_t bUnits)
+		{
+			bExternalPress = true;
+			bExternalPressValid = false;
+			bPressEntityUnits = bUnits;
+			subscribe_homeassistant_state(&MS5837_Component::on_pressure_state_changed, strEntity_Id);
+		}
+
+		void on_pressure_state_changed(std::string pressure)
+		{
+			float num_float = std::stof(pressure);
+
+			//Convert incoming units to Pa
+				if (bPressEntityUnits == MS5837_UNITS_PRESS_HPA)
+					num_float *= 100;
+				else if (bPressEntityUnits == MS5837_UNITS_PRESS_KPA)
+					num_float *= 1000;
+				else if (bPressEntityUnits == MS5837_UNITS_PRESS_INHG)
+					num_float *= 3386.39;
+
+			atmosphericpress = num_float;
+			bExternalPressValid = true;
+
+			ESP_LOGI("custom", "MS5837:  Atmospheric Pressure updated to %0.2f hPa", num_float/100.0f);
+		}
+
 private:
 	uint8_t _model; //Sensor model as read from the device
 	bool bInitialized;
 	uint8_t bPCalcMode; // 0=Raw data only.  1=Altitude.  2=Depth
+
+	//External pressure entity
+		uint8_t bPressEntityUnits;
+		bool bExternalPress;		//TRUE if we're subscribed to something.  If so, don't send out any data until we get a valid pressure.
+		bool bExternalPressValid;	//TRUE once we receive something.
 
 	//Units in which to report the results
 		uint8_t bTempUnits;
