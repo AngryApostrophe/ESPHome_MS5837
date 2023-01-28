@@ -1,5 +1,5 @@
 # ESPHome_MS5837
-Custom ESPHome component for the MS5837-series pressure and temperature sensor.  Allows easy integration of the sensor into Home Assistant.  
+Custom ESPHome component for the MS5837-series pressure and temperature sensor.  Allows easy integration of the sensor into Home Assistant.  Perfect for measuring water tank or home sump levels.
 
 # Wiring
 <img src="/images/MS5837_Pinout.png" width="400px">
