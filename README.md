@@ -148,11 +148,11 @@ Sea Level Pressure may be optionally supplied.
 - If sea level pressure is supplied, the altitude calculation is based on this pressure.  This mean the component reports true altitude.
 
 #### MS5837_MODE_DEPTH
-Ambient pressure needs to be supplied to accurately calculate depth.  If not available, it assumes your location is at sea level and the depth reading will be inaccurate.  This could be supplied from another sensor above water or a weather station.  If neither are available, calculating the [standard pressure](https://www.madur.com/index.php?page=/altitude) should get you close.
+Ambient pressure needs to be supplied to accurately calculate depth.  This could be supplied from another sensor above water or a weather station.  If neither are available, calculating the [standard pressure](https://www.madur.com/index.php?page=/altitude) should get you close though you will see variations as the ambient pressure changes.  If not supplied, it assumes your location is at sea level and the depth reading will be inaccurate.  
 
 ### Entity
 
-Subscribing to a Home Assistant service requires no external setup.  Simply supply the entity identifier and whenever the entity updates the component will automatically read the new value.  On startup the processing of altitude/depth calculations will be delayed until a valid pressure is received, so as to avoid incorrect values.  Pressure may be supplied in any of the valid units.
+Subscribing to a Home Assistant entity requires no external setup.  Simply supply the entity identifier and whenever the entity updates the component will automatically read the new value.  On startup the processing of altitude/depth calculations will be delayed until a valid pressure is received, so as to avoid incorrect values.  Pressure may be supplied in any of the valid units.
 
 ``` yaml
 MS5837->SubscribeToPressureState("sensor.weather_station_pressure", MS5837_UNITS_PRESS_INHG);
