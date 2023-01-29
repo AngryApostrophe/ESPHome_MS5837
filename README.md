@@ -4,7 +4,7 @@ Custom ESPHome component for the MS5837-series pressure and temperature sensor. 
 # Wiring
 <img src="/images/MS5837_Pinout.png" width="400px">
 <img src="/images/MS5837_Circuit.png" width="400px">
-Note: I've had better luck using 2.2k ohm resistors rather than 10k.
+Pull-up resistor and decoupling capacitor values will depend on your installation.  I've succesfully used a 15' cable with 4.7kΩ and 1 uF.
 
 # Usage
 Save the source MS5837_Component.h to your Home Assistant config/esphome folder.
