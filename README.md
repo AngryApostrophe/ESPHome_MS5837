@@ -1,10 +1,10 @@
 # ESPHome_MS5837
-Custom ESPHome component for the MS5837-series pressure and temperature sensor.  Allows easy integration of the sensor into Home Assistant.  
+Custom ESPHome component for the MS5837-series pressure and temperature sensor.  Allows easy integration of the sensor into Home Assistant.  Perfect for measuring water tank or home sump levels.
 
 # Wiring
 <img src="/images/MS5837_Pinout.png" width="400px">
 <img src="/images/MS5837_Circuit.png" width="400px">
-Note: I've had better luck using 2.2k ohm resistors rather than 10k.
+Pull-up resistor and decoupling capacitor values will depend on your installation.  I've succesfully used a 15' cable with 4.7kΩ and 1 uF.
 
 # Usage
 Save the source MS5837_Component.h to your Home Assistant config/esphome folder.
@@ -155,11 +155,11 @@ Sea Level Pressure may be optionally supplied.
 - If sea level pressure is supplied, the altitude calculation is based on this pressure.  This mean the component reports true altitude.
 
 #### MS5837_MODE_DEPTH
-Ambient pressure needs to be supplied to accurately calculate depth.  If not available, it assumes your location is at sea level and the depth reading will be inaccurate.  This could be supplied from another sensor above water or a weather station.  If neither are available, calculating the [standard pressure](https://www.madur.com/index.php?page=/altitude) should get you close.
+Ambient pressure needs to be supplied to accurately calculate depth.  This could be supplied from another sensor above water or a weather station.  If neither are available, calculating the [standard pressure](https://www.madur.com/index.php?page=/altitude) should get you close though you will see variations as the ambient pressure changes.  If not supplied, it assumes your location is at sea level and the depth reading will be inaccurate.  
 
 ### Entity
 
-Subscribing to a Home Assistant service requires no external setup.  Simply supply the entity identifier and whenever the entity updates the component will automatically read the new value.  On startup the processing of altitude/depth calculations will be delayed until a valid pressure is received, so as to avoid incorrect values.  Pressure may be supplied in any of the valid units.
+Subscribing to a Home Assistant entity requires no external setup.  Simply supply the entity identifier and whenever the entity updates the component will automatically read the new value.  On startup the processing of altitude/depth calculations will be delayed until a valid pressure is received, so as to avoid incorrect values.  Pressure may be supplied in any of the valid units.
 
 ``` yaml
 MS5837->SubscribeToPressureState("sensor.weather_station_pressure", MS5837_UNITS_PRESS_INHG);
