@@ -55,6 +55,8 @@ public:
 		fPressOffset = 0;
 		fTempOffset = 0;
 
+		bAvgRuns = 1;
+
 		bExternalPress = false;
 
 		//Setup default units if user doesn't specify
@@ -134,12 +136,10 @@ public:
 
 		bInitialized = true;
 		ESP_LOGI("custom", "MS5837:  MS5837 initialized.");
-	}
+	} //setup()
 
 	void update()
 	{
-		uint32_t err;
-
 		//Check that the sensor has been initialized.  If not, try it
 			if (!bInitialized)
 				setup();
@@ -151,6 +151,58 @@ public:
 				return;
 			}
 
+		//Get the data from the sensor.  Request it up to bAvgRuns and then average them together.
+			float fAvgTemp = 0;
+			float fAvgPressure = 0;
+
+			for (uint8_t x = 0; x < bAvgRuns; x++)
+			{
+				//Read the current values.  Try up to 3 times to get a valid response
+					uint8_t bRetryCount = 0;
+					while (!ReadAndCalcValues())
+					{
+						bRetryCount++;
+						if (bRetryCount > 3)
+						{
+							ESP_LOGE("custom", "MS5837:  Failed 3 attempts to communicate with sensor. Aborting.");
+							InvalidateSensors();
+							return;
+						}
+					}
+
+				//Keep our running average
+					fAvgTemp += Temperature();
+					fAvgPressure += Pressure();
+
+				delay(20); // Give it a bit for next reading
+			}
+
+			//Average of all the calculations
+				fAvgTemp /= bAvgRuns;
+				fAvgPressure /= bAvgRuns;
+
+		//Publish the results
+			temperature_sensor->publish_state(ConvertTemp(fAvgTemp));
+			pressure_sensor->publish_state(ConvertPress(fAvgPressure));
+			
+			if (bExternalPress && !bExternalPressValid) //If we're waiting for external pressure, don't calculate Alt/Depth
+			{
+				ESP_LOGE("custom", "MS5837:  Waiting for ambient pressure from Home Assitant entity. Skipped alt/depth.");
+			}
+			else
+			{
+				if (bPCalcMode == MS5837_MODE_ALTITUDE)
+					altitude_sensor->publish_state(ConvertAlt(Altitude(fAvgPressure)));
+				else if (bPCalcMode == MS5837_MODE_DEPTH)
+					altitude_sensor->publish_state(ConvertAlt(Depth(fAvgPressure)));
+			}
+	} //update()
+
+	//Request data from the sensor and calculate temperature and pressure
+	uint8_t ReadAndCalcValues()
+	{
+		uint32_t err;
+
 		// Request D1 (raw pressure)
 			Wire.beginTransmission(MS5837_ADDR);
 			Wire.write(MS5837_CONVERT_D1_8192);
@@ -158,8 +210,7 @@ public:
 			if (err != 0)
 			{
 				ESP_LOGE("custom", "MS5837:  Comms error requesting D1.  Error no %d.", err);
-				InvalidateSensors();
-				return;
+				return 0;
 			}
 
 			delay(20); // Max conversion time per datasheet
@@ -171,16 +222,14 @@ public:
 			if (err != 0)
 			{
 				ESP_LOGE("custom", "MS5837:  Comms error requesting D1 Read.  Error no %d.", err);
-				InvalidateSensors();
-				return;
+				return 0;
 			}
 
 			err = Wire.requestFrom(MS5837_ADDR,3);
 			if (err != 3)
 			{
 				ESP_LOGE("custom", "MS5837:  Comms error reading D1 reply.  Received invalid response.");
-				InvalidateSensors();
-				return;
+				return 0;
 			}
 
 			D1_pres = 0;
@@ -195,8 +244,7 @@ public:
 			if (err != 0)
 			{
 				ESP_LOGE("custom", "MS5837:  Comms error requesting D2.  Error no %d.", err);
-				InvalidateSensors();
-				return;
+				return 0;
 			}
 
 			delay(20); // Max conversion time per datasheet
@@ -208,16 +256,14 @@ public:
 			if (err != 0)
 			{
 				ESP_LOGE("custom", "MS5837:  Comms error requesting D2 Read.  Error no %d.", err);
-				InvalidateSensors();
-				return;
+				return 0;
 			}
 
 			err = Wire.requestFrom(MS5837_ADDR,3);
 			if (err != 3)
 			{
 				ESP_LOGE("custom", "MS5837:  Comms error reading D2 reply.  Received invalid response.");
-				InvalidateSensors();
-				return;
+				return 0;
 			}
 
 			D2_temp = 0;
@@ -228,22 +274,10 @@ public:
 		//Calculate the values
 			calculate();
 
-		//Publish the results
-			temperature_sensor->publish_state(ConvertTemp(Temperature()));
-			pressure_sensor->publish_state(ConvertPress(Pressure()));
-			
-			if (bExternalPress && !bExternalPressValid) //If we're waiting for external pressure, don't calculate Alt/Depth
-			{
-				ESP_LOGE("custom", "MS5837:  Waiting for ambient pressure from Home Assitant entity. Skipped alt/depth.");
-			}
-			else
-			{
-				if (bPCalcMode == MS5837_MODE_ALTITUDE)
-					altitude_sensor->publish_state(ConvertAlt(Altitude()));
-				else if (bPCalcMode == MS5837_MODE_DEPTH)
-					altitude_sensor->publish_state(ConvertAlt(Depth()));
-			}
-	}
+		return 1;
+	} //ReadAndCalcValues()
+
+	
 
 	//Run the calculations from the raw temp/press reported by the sensor
 	void calculate()
@@ -323,7 +357,7 @@ public:
 			{
 				P = (((D1_pres*SENS2)/2097152l-OFF2)/8192l);
 			}
-	}
+	} //calculate()
 
 	//Home Assistant has sent us a new atmospheric pressure for depth calculations.  Must be in hPa
 		void on_update_pressure(std::string pressure)
@@ -391,10 +425,17 @@ public:
 			ESP_LOGI("custom", "MS5837:  Atmospheric Pressure updated to %0.2f hPa", num_float/100.0f);
 		}
 
+	//User can request to average multiple runs of sensor data
+		void SetResultsAvgCount(uint8_t bCount)
+		{
+			bAvgRuns = bCount;
+		}
+
 private:
 	uint8_t _model; //Sensor model as read from the device
 	bool bInitialized;
 	uint8_t bPCalcMode; // 0=Raw data only.  1=Altitude.  2=Depth
+	uint8_t bAvgRuns;	//How many runs to average to return to the user.  Defaults to 1
 
 	//External pressure entity
 		uint8_t bPressEntityUnits;
@@ -411,8 +452,8 @@ private:
 		float fPressOffset; //hPa
 
 	float fluidDensity; 		//Density of the fluid the sensor is in (kg/m^3).  Used for converting pressure to depth.
-	float atmosphericpress; 	//This has 2 uses.  In MS5837_MODE_ALTITUDE it is the Sea Level Pressure in Pa, if known (for example, from a weather station).  You'll get more accurate height results.  If not known, it'll use ISA (101325 pa)
-								//                  In MS5837_MODE_DEPTH it is the actual ambient atmospheric pressure in Pa.
+	float atmosphericpress; 	/*This has 2 uses.  In MS5837_MODE_ALTITUDE it is the Sea Level Pressure in Pa, if known (for example, from a weather station).  You'll get more accurate height results.  If not known, it'll use ISA (101325 pa)
+								                    In MS5837_MODE_DEPTH it is the actual ambient atmospheric pressure in Pa.  */
 
 	//Calculation variables
 		uint16_t C[8];
@@ -462,18 +503,18 @@ private:
 			return TEMP/100.0f + fTempOffset;
 		}
 
-	//Calculate the depth, given the sensed pressure and known ambient pressure
-		float Depth()
+	//Calculate the depth, given a pressure and known ambient pressure
+		float Depth(float fPressure_hpa)
 		{
 			// The pressure sensor measures absolute pressure, so it will measure the atmospheric pressure + water pressure
 			// We subtract the atmospheric pressure to calculate the depth with only the water pressure
-			return ((Pressure()*100)-atmosphericpress)/(fluidDensity*9.80665);  //Pressure()*100 converts hPa to Pa
+			return ((fPressure_hpa*100)-atmosphericpress)/(fluidDensity*9.80665);  //Pressure()*100 converts hPa to Pa
 		}
 
 	//Calculate Pressure Altitude in m (relative to sea level at ISA)
-		float Altitude()
+		float Altitude(float fPressure_hpa)
 		{
-			return (1-pow((Pressure()/(atmosphericpress/100)),.190284))*145366.45*.3048;
+			return (1-pow((fPressure_hpa/(atmosphericpress/100)),.190284))*145366.45*.3048;
 		}
 
 	//If an update fails, invalidate all the sensors. ("Unknown" in Home Assistant)

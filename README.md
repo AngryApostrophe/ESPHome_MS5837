@@ -39,6 +39,7 @@ sensor:
       auto MS5837 = new MS5837_Component(60000, MS5837_MODE_ALTITUDE);
       MS5837->SetUnits(MS5837_UNITS_TEMP_F, MS5837_UNITS_PRESS_INHG, MS5837_UNITS_ALT_FT);
       MS5837->SetOffsets(0, 1.7f);
+      MS5837->SetResultsAvgCount(3);
       MS5837->SubscribeToPressureState("sensor.weather_station_pressure", MS5837_UNITS_PRESS_INHG);
       App.register_component(MS5837);
       return {MS5837->temperature_sensor, MS5837->pressure_sensor, MS5837->altitude_sensor};
@@ -94,6 +95,12 @@ MS5837->SetOffsets(0, 1.7f);
 ```
 - Temperature: °C
 - Pressure: hPa
+
+### Smooth results (optional)
+If desired, the component will request multiple readings of the sensor values and average the results.  This should help to smooth out any noise in the sensor.  Simply tell it how many readings you would like to average.  If this line is not included, it defaults to a single reading (no smoothing).
+``` yaml
+MS5837->SetResultsAvgCount(3);
+```
 
 ### Read the values
 If using MS5837_MODE_RAW, only 2 values will be returned
