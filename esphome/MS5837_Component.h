@@ -140,6 +140,8 @@ public:
 
 	void update()
 	{
+		uint8_t x;
+
 		//Check that the sensor has been initialized.  If not, try it
 			if (!bInitialized)
 				setup();
@@ -152,10 +154,13 @@ public:
 			}
 
 		//Get the data from the sensor.  Request it up to bAvgRuns and then average them together.
+			float fTempValues[bAvgRuns];
+			float fPressValues[bAvgRuns];
+
 			float fAvgTemp = 0;
 			float fAvgPressure = 0;
 
-			for (uint8_t x = 0; x < bAvgRuns; x++)
+			for (x = 0; x < bAvgRuns; x++)
 			{
 				//Read the current values.  Try up to 3 times to get a valid response
 					uint8_t bRetryCount = 0;
@@ -170,9 +175,13 @@ public:
 						}
 					}
 
-				//Keep our running average
-					fAvgTemp += Temperature();
-					fAvgPressure += Pressure();
+				//Save this value
+					fTempValues[x] = Temperature();
+					fPressValues[x] = Pressure();
+
+					//Also keep a running sum for std dev later
+						fAvgTemp += Temperature();
+						fAvgPressure += Pressure();
 
 				delay(20); // Give it a bit for next reading
 			}
@@ -181,9 +190,47 @@ public:
 				fAvgTemp /= bAvgRuns;
 				fAvgPressure /= bAvgRuns;
 
+		//Filter out the outliers
+			//Calculate the average deviation
+				float fAvgTempDev = 0;
+				float fAvgPressDev = 0;
+				for (x = 0; x < bAvgRuns; x++)
+				{
+					fAvgTempDev += abs(fTempValues[x]-fAvgTemp);
+					fAvgPressDev += abs(fPressValues[x]-fAvgPressure);
+				}
+				fAvgTempDev /= bAvgRuns;
+				fAvgPressDev /= bAvgRuns;
+
+			//Discard any that are outside of the average deviation (outliers)
+				float fFilteredAvgTemp = 0;
+				float fFilteredAvgPressure = 0;
+
+				uint8_t bTempCount = 0;
+				uint8_t bPressCount = 0;
+
+				for (x =0; x <bAvgRuns; x++)
+				{
+					if (abs(fTempValues[x]-fAvgTemp) <= fAvgTempDev) //If deviation > avg deviation, discard it
+					{
+						fFilteredAvgTemp += fTempValues[x];
+						bTempCount++;
+					}
+
+					if (abs(fPressValues[x]-fAvgPressure) <= fAvgPressDev) //If deviation > avg deviation, discard it
+					{
+						fFilteredAvgPressure += fPressValues[x];
+						bPressCount++;
+					}
+				}
+
+				//Calculate the new filtered average
+					fFilteredAvgTemp /= bTempCount;
+					fFilteredAvgPressure /= bPressCount;
+
 		//Publish the results
-			temperature_sensor->publish_state(ConvertTemp(fAvgTemp));
-			pressure_sensor->publish_state(ConvertPress(fAvgPressure));
+			temperature_sensor->publish_state(ConvertTemp(fFilteredAvgTemp));
+			pressure_sensor->publish_state(ConvertPress(fFilteredAvgPressure));
 			
 			if (bExternalPress && !bExternalPressValid) //If we're waiting for external pressure, don't calculate Alt/Depth
 			{
@@ -192,9 +239,9 @@ public:
 			else
 			{
 				if (bPCalcMode == MS5837_MODE_ALTITUDE)
-					altitude_sensor->publish_state(ConvertAlt(Altitude(fAvgPressure)));
-				else if (bPCalcMode == MS5837_MODE_DEPTH)
-					altitude_sensor->publish_state(ConvertAlt(Depth(fAvgPressure)));
+					altitude_sensor->publish_state(ConvertAlt(Altitude(fFilteredAvgPressure)));
+				else if (bPCalcMode == MS5837_MODE_DEPTH && Depth(fFilteredAvgPressure))
+					altitude_sensor->publish_state(ConvertAlt(Depth(fFilteredAvgPressure)));
 			}
 	} //update()
 
