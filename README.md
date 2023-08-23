@@ -4,6 +4,7 @@ Custom ESPHome component for the MS5837-series pressure and temperature sensor. 
 # Wiring
 <img src="/images/MS5837_Pinout.png" width="400px">
 <img src="/images/MS5837_Circuit.png" width="400px">
+<img src="/images/SampleBoard.png" width="400px">
 Pull-up resistor and decoupling capacitor values will depend on your installation.  I've succesfully used a 15' cable with 4.7kΩ and 1 uF.
 
 # Usage
@@ -28,7 +29,6 @@ i2c:
   sda: 21
   scl: 22
   scan: true
-  id: bus_a
 ```
 
 ## Define the component and outputs
