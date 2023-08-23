@@ -33,7 +33,7 @@ i2c:
 sensor:
   - platform: custom
     lambda: |-
-      auto MS5837 = new MS5837_Component(60000, MS5837_MODE_ALTITUDE);
+      auto MS5837 = new MS5837_Component(60000, MS5837_MODE_ALTITUDE, MS5837_OSR_1024);
       MS5837->SetUnits(MS5837_UNITS_TEMP_F, MS5837_UNITS_PRESS_INHG, MS5837_UNITS_ALT_FT);
       MS5837->SetOffsets(0, 1.7f);
       MS5837->SetResultsAvgCount(3);

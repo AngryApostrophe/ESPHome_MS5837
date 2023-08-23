@@ -36,7 +36,7 @@ i2c:
 sensor:
   - platform: custom
     lambda: |-
-      auto MS5837 = new MS5837_Component(60000, MS5837_MODE_ALTITUDE);
+      auto MS5837 = new MS5837_Component(60000, MS5837_MODE_ALTITUDE, MS5837_OSR_1024);
       MS5837->SetUnits(MS5837_UNITS_TEMP_F, MS5837_UNITS_PRESS_INHG, MS5837_UNITS_ALT_FT);
       MS5837->SetOffsets(0, 1.7f);
       MS5837->SetResultsAvgCount(3);
@@ -55,15 +55,25 @@ sensor:
         accuracy_decimals: 1
 ```
 ### Create it
-First instantiate the component and supply basic parameters.
+First instantiate the component and supply basic parameters.  All of these parameters are optional if you wish to use the defaults.
 ``` yaml
-auto MS5837 = new MS5837_Component(60000, MS5837_MODE_ALTITUDE);
+auto MS5837 = new MS5837_Component(60000, MS5837_MODE_ALTITUDE, MS5837_OSR_1024);
 ```
 The first parameter is the update frequency, in ms. In this case it will update every 60 seconds.
+
 Next is the operating mode.  There are 3 choices:
-- MS5837_MODE_RAW - Report only temperature and pressure
+- MS5837_MODE_RAW - Report only temperature and pressure (default)
 - MS5837_MODE_ALTITUDE - Report either true altitude or pressure altitude depending on if sea level pressure is supplied later
 - MS5837_MODE_DEPTH - Report depth.  Needs ambient pressure for accurate results (see service "update_pressure")
+
+Finally is the resolution.  Higher resolutions give more precise results but take longer to compute.  There are 6 choices:
+- MS5837_OSR_8192 - 36ms (default)
+- MS5837_OSR_4096 - 18ms
+- MS5837_OSR_2048 - 10ms
+- MS5837_OSR_1024 - 6ms
+- MS5837_OSR_512 - 4ms
+- MS5837_OSR_256 - 2ms
+
 
 ### Units
 Decide which units to report in (optional).  Altitude/Depth units may be left out if using MS5837_MODE_RAW.
@@ -97,7 +107,7 @@ MS5837->SetOffsets(0, 1.7f);
 - Pressure: hPa
 
 ### Smooth results (optional)
-If desired, the component will request multiple readings of the sensor values and average the results.  This should help to smooth out any noise in the sensor.  Simply tell it how many readings you would like to average.  If this line is not included, it defaults to a single reading (no smoothing).
+If desired, the component will request multiple readings of the sensor values and average the results.  This should help to smooth out any noise in the sensor.  Simply tell it how many readings you would like to average.  If this line is not included, it defaults to a single reading (no smoothing).  Note that at higher OSR values this can add significant time.
 ``` yaml
 MS5837->SetResultsAvgCount(3);
 ```

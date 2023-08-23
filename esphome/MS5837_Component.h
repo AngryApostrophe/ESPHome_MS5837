@@ -35,6 +35,14 @@
 #define MS5837_UNITS_ALT_CM        2
 #define MS5837_UNITS_ALT_IN        3
 
+#define MS5837_OSR_8192		       0
+#define MS5837_OSR_4096		       1
+#define MS5837_OSR_2048		       2
+#define MS5837_OSR_1024		       3
+#define MS5837_OSR_512		       4
+#define MS5837_OSR_256		       5
+
+const uint8_t bConversionTime[] = {18, 9, 5, 3, 2, 1};
 
 
 class MS5837_Component : public PollingComponent, public Sensor, public CustomAPIDevice
@@ -45,7 +53,7 @@ public:
 	Sensor *pressure_sensor = new Sensor();
 	Sensor *altitude_sensor = new Sensor(); //This will also be depth, if in MS5837_MODE_DEPTH
 
-	MS5837_Component(uint32_t Updatems = 60000, uint8_t mode = MS5837_MODE_RAW) : PollingComponent(Updatems)
+	MS5837_Component(uint32_t Updatems = 60000, uint8_t mode = MS5837_MODE_RAW, uint8_t osr = MS5837_OSR_8192) : PollingComponent(Updatems)
 	{
 		bInitialized = false;
 		fluidDensity = 997; //Density of fresh water.  User can change this with SetDensity()
@@ -54,6 +62,8 @@ public:
 
 		fPressOffset = 0;
 		fTempOffset = 0;
+
+		bOSR = osr;
 
 		bAvgRuns = 1;
 
@@ -117,7 +127,7 @@ public:
 
 			if ( crcCalculated != crcRead )
 			{
-				ESP_LOGE("custom", "MS5837:  Initialization failed.  CRC error.  Error no %d.", err);
+				ESP_LOGE("custom", "MS5837:  Initialization failed.  CRC error.");
 				return;
 			}
 
@@ -127,6 +137,7 @@ public:
 			if (version == MS5837_VERSION_02BA01 || version == MS5837_VERSION_02BA21 || version == MS5837_VERSION_30BA26 || version == MS5837_VERSION_02BA06)
 			{
 				_model = version;
+				ESP_LOGI("custom", "MS5837:  Detected sensor code:  0x%02X.", version);
 			}
 			else
 			{
@@ -167,7 +178,7 @@ public:
 					while (!ReadAndCalcValues())
 					{
 						bRetryCount++;
-						if (bRetryCount > 3)
+						if (bRetryCount > 2)
 						{
 							ESP_LOGE("custom", "MS5837:  Failed 3 attempts to communicate with sensor. Aborting.");
 							InvalidateSensors();
@@ -183,7 +194,7 @@ public:
 						fAvgTemp += Temperature();
 						fAvgPressure += Pressure();
 
-				delay(20); // Give it a bit for next reading
+				delay(bConversionTime[bOSR]); // Give it a bit for next reading. There's no required time here, just want to wait a bit
 			}
 
 			//Average of all the calculations
@@ -252,7 +263,7 @@ public:
 
 		// Request D1 (raw pressure)
 			Wire.beginTransmission(MS5837_ADDR);
-			Wire.write(MS5837_CONVERT_D1_8192);
+			Wire.write(MS5837_CONVERT_D1_8192 - (bOSR*2));
 			err = Wire.endTransmission();
 			if (err != 0)
 			{
@@ -260,7 +271,7 @@ public:
 				return 0;
 			}
 
-			delay(20); // Max conversion time per datasheet
+			delay(bConversionTime[bOSR]); // Max conversion time per datasheet
 
 		//Read the response
 			Wire.beginTransmission(MS5837_ADDR);
@@ -286,7 +297,7 @@ public:
 
 		// Request D2 (raw temperature)
 			Wire.beginTransmission(MS5837_ADDR);
-			Wire.write(MS5837_CONVERT_D2_8192);
+			Wire.write(MS5837_CONVERT_D2_8192 - (bOSR*2));
 			err = Wire.endTransmission();
 			if (err != 0)
 			{
@@ -294,7 +305,7 @@ public:
 				return 0;
 			}
 
-			delay(20); // Max conversion time per datasheet
+			delay(bConversionTime[bOSR]); // Max conversion time per datasheet
 
 		//Read the response
 			Wire.beginTransmission(MS5837_ADDR);
@@ -483,6 +494,7 @@ private:
 	bool bInitialized;
 	uint8_t bPCalcMode; // 0=Raw data only.  1=Altitude.  2=Depth
 	uint8_t bAvgRuns;	//How many runs to average to return to the user.  Defaults to 1
+	uint8_t bOSR;	//Resolution to request. Higher resolution = slower. Defaults to 0. See definitions at top.
 
 	//External pressure entity
 		uint8_t bPressEntityUnits;
